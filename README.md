@@ -13,6 +13,7 @@ Premise:
 - We want to divide objects in a map into a defined amount of partitions. 
 - The partition has to be physically continuous and has equal amount of population. 
 - Each object has a property. There are two or more enumeration of this property a object can take one. Each object can take on exactly one enumeration at once. 
-- DominentPartition: one cluster such that 50% of the population has a 
+- DominentPartition: one cluster such that 50% of the population has the same property. 
 
 Objective: 
+- Find a physcially continuous partition such that the number of DominentPartition of a particular enum is maximized. 
