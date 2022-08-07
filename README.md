@@ -17,3 +17,6 @@ Premise:
 
 Objective: 
 - Find a physcially continuous partition such that the number of DominentPartition of a particular enum is maximized. 
+
+### Development Tool
+Most of the code will be done in Jupiter Notebook using Python and matplotlib. 
