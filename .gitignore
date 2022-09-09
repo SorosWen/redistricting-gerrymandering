@@ -1,0 +1,6 @@
+# Cache
+*.vscode
+*.ipynb_checkpoints
+
+# virtual environment
+environment
