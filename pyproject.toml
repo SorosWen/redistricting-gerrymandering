@@ -3,12 +3,12 @@ requires = ["hatchling", "matplotlib>=3.5.2", "matplotlib-inline>=0.1.3", "numpy
 build-backend = "hatchling.build"
 
 [project]
-name = "redistricting_simulation_soroswen"
-version = "0.0.1"
+name = "redistricting_simulation"
+version = "0.0.2"
 authors = [
   { name="Soros Wen", email="wenmingjun0725@gmail.com" },
 ]
-description = "A Redistricting Simulation"
+description = "A package allows you to simulate redistricting process. "
 readme = "README.md"
 license = { file="LICENSE" }
 requires-python = ">=3.8"
@@ -19,5 +19,5 @@ classifiers = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/pypa/sampleproject"
-"Bug Tracker" = "https://github.com/pypa/sampleproject/issues"
+"Homepage" = "https://github.com/SorosWen/redistricting-gerrymandering"
+"Bug Tracker" = "https://github.com/SorosWen/redistricting-gerrymandering/issues"
