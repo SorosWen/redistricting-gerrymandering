@@ -1,7 +1,10 @@
 # Cache
 *.vscode
 *.ipynb_checkpoints
+.DS_Store
 
 # virtual environment
 environment
 BackUps
+__pycache__
+test_env

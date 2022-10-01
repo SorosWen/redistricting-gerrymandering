@@ -1,13 +1,19 @@
 # Create instance of grid.
 class Agent:
     def __init__(self, colorId, color, x, y):
+        if colorId == None: 
+            raise Exception("Agent is initialized with colorId = None. ")
+        if color == None: 
+            raise Exception("Agent is initialized with color = None. ")
+        if x == None or y == None: 
+            raise Exception("Agent is initialized without complete coordinate. ")
         self.color = color
         self.colorId = colorId
         self.x = x
         self.y = y
         
     def __str__(self):
-        return str(self.colorId)
+        return "Agent: Color = {} | colorId = {} | x, y = ({}, {})".format(self.color, self.colorId, self.x, self.y)
     
     def getX(self):
         return self.x
@@ -27,3 +33,6 @@ class Agent:
     def setCoord(self, newX, newY):
         self.x = newX
         self.y = newY
+
+def create_Agent(colorId, color, x, y):
+    return Agent(colorId, color, x, y)
