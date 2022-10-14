@@ -1,28 +1,30 @@
 import collections
 import matplotlib.pyplot as plt
 import matplotlib.colors
-import random
-from matplotlib.animation import FuncAnimation
+from functools import reduce
+from operator import add
 
 class District:
-    def __init__(self, length, width, numOfColor, colorList):
+    def __init__(self, length, width, colorList):
         # define the size of the District. 
         self.length = length # x
         self.width = width # y
-        self.tiles = [[0 for j in range(self.width)] for i in range(self.length)]
+        self.tiles = [[None for j in range(self.width)] for i in range(self.length)]
         self.population = 0
         self.summary = dict()
-        self.numOfColor = numOfColor
         self.colorList = colorList
         
-    def addMember(self, x, y, colorId, check = True):
+        self.precincts = set()
+        
+    def addMember(self, x, y, agent, check = True):
         if not check or self.newMemberIsPhysicallyContinuous(self, x, y):
-            self.tiles[x][y] = colorId
+            self.tiles[x][y] = agent
             self.population +=1 
-            if colorId not in self.summary:
-                self.summary[colorId] = 1
+            firstChoice = agent.getFirstChoice()
+            if firstChoice not in self.summary:
+                self.summary[firstChoice] = 1
             else: 
-                self.summary[colorId] += 1
+                self.summary[firstChoice] += 1
             return True
         else:
             return False
@@ -30,13 +32,13 @@ class District:
     def newMemberIsPhysicallyContinuous(self, x, y):
         if not (x >= 0 and x < self.length) or not (y >= 0 and y < self.width): 
             return False
-        if (x + 1 < self.length and self.tiles[x + 1][y] >= 1):
+        if (x + 1 < self.length and self.tiles[x + 1][y] != None):
             return True
-        if (x - 1 >= 0 and self.tiles[x-1][y] >= 1):
+        if (x - 1 >= 0 and self.tiles[x-1][y] != None):
             return True
-        if (y + 1 < self.width and self.tiles[x][y+1] >= 1):
+        if (y + 1 < self.width and self.tiles[x][y+1] != None):
             return True
-        if (y-1 >= 0 and self.tiles[x][y-1] >= 1):
+        if (y-1 >= 0 and self.tiles[x][y-1] != None):
             return True
         return False
     
@@ -48,49 +50,49 @@ class District:
                 circularList = []                
                 # top left corner
                 if (x - 1 >= 0 and y - 1 >= 0):
-                    if self.tiles[x-1][y-1] > 0:
+                    if self.tiles[x-1][y-1] != None:
                         circularList.append(1)
                     else:
                         circularList.append(0)
                 # top 
                 if (x-1 >= 0):
-                    if self.tiles[x-1][y] > 0:
+                    if self.tiles[x-1][y] != None:
                         circularList.append(1)
                     else:
                         circularList.append(0)
                 # top right corder
                 if (x - 1 >= 0 and y + 1 < self.width):
-                    if self.tiles[x-1][y+1] > 0:
+                    if self.tiles[x-1][y+1] != None:
                         circularList.append(1)
                     else:
                         circularList.append(0)
                 # right
                 if (y + 1 < self.width):
-                    if self.tiles[x][y+1] > 0:
+                    if self.tiles[x][y+1] != None:
                         circularList.append(1)
                     else:
                         circularList.append(0)
                 # bottom right: 
                 if (x + 1 < self.length and y+1 < self.width):
-                    if self.tiles[x+1][y+1] > 0:
+                    if self.tiles[x+1][y+1] != None:
                         circularList.append(1)
                     else:
                         circularList.append(0)
                 # down
                 if (x + 1 < self.length):
-                    if self.tiles[x+1][y] > 0:
+                    if self.tiles[x+1][y] != None:
                         circularList.append(1)
                     else:
                         circularList.append(0)
                 # bottom left corner
                 if (x + 1 < self.length and y - 1 >= 0):
-                    if self.tiles[x+1][y-1] > 0:
+                    if self.tiles[x+1][y-1] != None:
                         circularList.append(1)
                     else:
                         circularList.append(0)
                 # left
                 if (y-1>= 0):
-                    if self.tiles[x][y-1] > 0:
+                    if self.tiles[x][y-1] != None:
                         circularList.append(1)
                     else:
                         circularList.append(0)
@@ -142,7 +144,7 @@ class District:
         islandsCount = 0
         for i in range(self.length):
             for j in range(self.width):
-                if self.tiles[i][j] > 0 and (i, j) not in visited:
+                if self.tiles[i][j] != None and (i, j) not in visited:
                     if islandsCount >= 1:
                         return False
                     self.BFS((i, j), visited)
@@ -161,7 +163,7 @@ class District:
                 ycord = yr + j
                 if (xcord >= 0 and xcord < self.length 
                     and ycord >= 0 and ycord < self.width 
-                    and self.tiles[xcord][ycord] > 0
+                    and self.tiles[xcord][ycord] != None
                     and (xcord, ycord) not in visited):
                     q.append((xcord, ycord))
                     visited.add((xcord, ycord))
@@ -175,15 +177,17 @@ class District:
         if (x < 0 or x > self.length or y < 0 or y > self.width):
             return None
         
-        if self.tiles[x][y] == 0:
+        if self.tiles[x][y] == None:
             return None
         else: 
-            temp = self.tiles[x][y]
-            self.tiles[x][y] = 0
+            tempAgent = self.tiles[x][y]
+            self.tiles[x][y] = None
             if self.isPhysicallyContinuous(x=x, y=y):
-                return temp
+                firstChoice = tempAgent.getFirstChoice()
+                self.summary[firstChoice] -= 1
+                return tempAgent
             else:
-                self.tiles[x][y] = temp
+                self.tiles[x][y] = tempAgent
                 return None
     
     def show(self):
@@ -194,14 +198,13 @@ class District:
         bufferList = [] 
         for i in range(self.width):
             bufferList.append(i % len(self.colorList))
-        plt.imshow([bufferList] + self.tiles, cmap=matplotlib.colors.ListedColormap(self.colorList))
+        mapTiles = self.getTileInColorIds()
+        plt.imshow([bufferList] + mapTiles, cmap=matplotlib.colors.ListedColormap(self.colorList))
         plt.show()
         
     def getIm(self):
-        actualColorList = []
-        for i in range(len(self.summary) + 1):
-            actualColorList.append(self.colorList[i])
-        return self.tiles, matplotlib.colors.ListedColormap(actualColorList)
+        mapTiles = self.getTileInColorIds()
+        return mapTiles, matplotlib.colors.ListedColormap(self.colorList)
     
     def getSummary(self, percentage = False):
         if not percentage:
@@ -216,30 +219,12 @@ class District:
     def isAdjacentTo(self, district2):
         for i in range(self.length):
             for j in range(self.width):
-                if self.tiles[i][j] != 0 and district2.newMemberIsPhysicallyContinuous(i, j):
+                if self.tiles[i][j] != None and district2.newMemberIsPhysicallyContinuous(i, j):
                     return True
         return False
 
     def balanceTwoDistrictsIfAdjacent(self, district2, method = "compact"):
-        # method 1: sequantial merge. No longer being updated. 
-        if method == 'extreme':
-            for i in range(self.length):
-                for j in range(self.width):
-                    # if population of two districts are even
-                    if self.getPopulation() <=  district2.getPopulation():
-                        return
-                    if random.uniform(0, 1) < 0.2 and self.tiles[i][j] != 0 and district2.newMemberIsPhysicallyContinuous(i, j):
-                        # eject member if doing so the district is still physically continuous. 
-                        tempColorId = self.tiles[i][j]
-                        self.tiles[i][j] = 0
-                        if (self.isPhysicallyContinuous(x=i, y=j)):
-                            self.population -= 1 
-                            self.summary[tempColorId] -= 1
-                            district2.addMember(i, j, tempColorId, False)
-                        else:
-                            self.tiles[i][j] = tempColorId
-    
-        # method 2: adjacent cell merge first. 
+        # method 1: adjacent cell merge first. 
         # each time, pick out all the tiles that are adjacent to the other district.
         if method == 'compact':
             itr = 0
@@ -251,7 +236,7 @@ class District:
                 for i in range(self.length):
                     for j in range(self.width):
                         # pick out all the cells here that is adjacent to the other district. 
-                        if self.tiles[i][j] != 0 and district2.newMemberIsPhysicallyContinuous(i, j):
+                        if self.tiles[i][j] != None and district2.newMemberIsPhysicallyContinuous(i, j):
                             adjacentTiles.add((i, j))
 
                 # if no tiles are adjacent, we break out of the loop. 
@@ -262,34 +247,28 @@ class District:
                 while(self.getPopulation() > district2.getPopulation() and len(adjacentTiles) > 0):
                     # we add this tile if after removing it we are still physically continuous. 
                     x, y = adjacentTiles.pop()
-                    tempColorId = self.tiles[x][y]
-                    self.tiles[x][y] = 0
+                    tempAgent = self.tiles[x][y]
+                    self.tiles[x][y] = None
                     if (self.isPhysicallyContinuous(x=x, y=y)):
                         self.population -= 1
-                        self.summary[tempColorId] -= 1
-                        district2.addMember(x, y, tempColorId, check=False)
+                        self.summary[tempAgent.getFirstChoice()] -= 1
+                        district2.addMember(x, y, tempAgent, check=False)
                         succeededCount += 1
                     else:
-                        self.tiles[x][y] = tempColorId
+                        self.tiles[x][y] = tempAgent
 
                 # if none of the adjacent tiles can be merged to the other district, break
                 if succeededCount == 0:
                     break
-
-    def jointDisplay(self, district):
-        jointTiles = [[0 for j in range(self.width)] for i in range(self.length)]
-        for i in range(self.length):
-            for j in range(self.width):
-                if self.tiles[i][j] != 0:
-                    jointTiles[i][j] = 1
-                if district.tiles[i][j] != 0:
-                    jointTiles[i][j] = 2
-                actualColorList = []
-        plt.imshow(jointTiles, cmap=matplotlib.colors.ListedColormap(self.colorList))
-        plt.show()
         
     def getPopulation(self):
         return self.population
+    
+    def getAgents(self, flat=True):
+        if flat:
+            return reduce(add, self.tiles)
+        else:
+            return self.tiles
     
     def tileIsOnEdge(self, x, y):
         if not (x >= 0 and x < self.length) or not (y >= 0 and y < self.width): 
@@ -298,28 +277,28 @@ class District:
         count = 0
         # right
         if (x + 1 < self.length):
-            if (self.tiles[x + 1][y] != 0):
+            if (self.tiles[x + 1][y] != None):
                 count += 1
         else:
             threshold -= 1
 
         # left
         if (x - 1 >= 0):
-            if (self.tiles[x-1][y] != 0):
+            if (self.tiles[x-1][y] != None):
                 count += 1
         else:
             threshold -= 1
 
         # down
         if (y + 1 < self.width):
-            if (self.tiles[x][y+1] != 0):
+            if (self.tiles[x][y+1] != None):
                 count += 1
         else:
             threshold -= 1
 
         # up
         if (y-1 >= 0):
-            if (self.tiles[x][y-1] != 0):
+            if (self.tiles[x][y-1] != None):
                 count += 1
         else:
             threshold -= 1
@@ -327,13 +306,22 @@ class District:
             return True
         return False
     
-    def getMajorityColorId(self):
-        max_value = max(self.summary.values())
-        max_key = max(self.summary, key=self.summary.get)
-        return max_key
+    # method : FPTP, RankChoiceVoting, Average
+    def getWinnerColorId(self, method="FPTP"):
+        if method == "FPTP":
+            max_key = max(self.summary, key=self.summary.get)
+            return max_key
+        # elif method == "RankChoiceVoting": 
     
-    def __str__(self):
-        return str([[self.tiles[i][j] for j in range(self.width)] for i in range(self.length)])
+    def getTileInColorIds(self):
+        return [[self.tiles[i][j].getFirstChoice() \
+                        if self.tiles[i][j] != None \
+                        else 0 \
+                    for j in range(self.width)] \
+                    for i in range(self.length)]
 
-def create_District(length, width, numOfColor, colorList):
-    return District(length, width, numOfColor, colorList)
+    def __str__(self):
+        return str(self.getTileInColorIds())
+
+def create_District(length, width, colorList):
+    return District(length, width, colorList)

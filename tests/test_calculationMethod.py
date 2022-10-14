@@ -2,6 +2,7 @@ import unittest
 import sys
 sys.path.insert(0, '../src')
 from redistricting_simulation import CalculationMethod as cm
+from redistricting_simulation import Agent
 
 class TestMap(unittest.TestCase):
     def test_FPTP(self):
@@ -46,6 +47,16 @@ class TestMap(unittest.TestCase):
         assignedSeats = cm.HighestAverage(partyListResult, totalSeats, divisor="Adams", quota='Droop')
         self.assertEqual(assignedSeats, {'Party1': 4, 'Party2': 2, 'Party3': 2, 'Party4':2, 
                                         'Party5':0, 'Party6':0})
+
+    def test_RankChoiceVoting_OneAchieveMajority(self):
+        agent1 = Agent.create_Agent(x=1, y=1, choices=["A", "B", "C"])
+        agent2 = Agent.create_Agent(x=1, y=1, choices=["B", "A", "C"])
+        agent3 = Agent.create_Agent(x=1, y=1, choices=["A", "D", "A"])
+        agent4 = Agent.create_Agent(x=1, y=1, choices=["B", "D", "C"])
+        agent5 = Agent.create_Agent(x=1, y=1, choices=["C", "A", "B"])
+        agents = [agent1, agent2, agent3, agent4, agent5]
+        winner = cm.RankChoiceVoting(agents)
+        self.assertEqual(winner, "A")
 
 if __name__ == '__main__':
     unittest.main()

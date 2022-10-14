@@ -4,37 +4,47 @@ from matplotlib.animation import FuncAnimation
 import random
 import sys
 import math
-from . import Agent, District, CalculationMethod as cm
+
+from numpy import nonzero
+from . import Agent, District
+from . import CalculationMethod as cm
 import warnings
 
 class Map:
-    def __init__(self, length, width):
+    def __init__(self, length, width, method, num = 7, grid = None, colors = []):
+        if length <= 0 or width <= 0: 
+            raise Exception("Length and width must be a positive integer.")
+        if length >= 200 or width >= 200:
+            print("Beware if length or width exceeds 200, the computation required would be substatially large.")
+        
         # define the size of the Map.
         self.length = length
         self.width = width
 
-        self.population = length * width
         self.grid = []
         self.summary = {}
         self.districts = []
-        self.colorMap = None    # field exclusively for matplotlib so it is easy to show the grid. 
         self.colors = []        # a list containing all the color that agents in this grid would be able to contain. 
-        self.method = ""      # the method that we wants for initializinng the map. 
+        self.colorMap = None    # field exclusively for matplotlib so it is easy to show the grid. 
         self.colorPartyNameMapping = []
+        
+        # parameters below are for animating the districting process. 
         self.ani = None
         self.p = None
         self.fig = None 
+
+        self.initialize(method=method, num=num, grid=grid, colors=colors)
         
-    def initialize(self, method = 'uniform', num = 7, grid = None, colors = []):
+    def initialize(self, method = 'Uniform', num = 7, 
+                    grid = None, colors = []):
         defaultColorList = ['red', 'blue', 'yellow', 'lightgreen', 'pink', 'brown', 'gold']
-        self.method = method
 
         # initialized Agent should never has colorId = 0, since 0 is for white space filler. 
         
         if num > 7 or num < 1: 
-            raise ValueError("Argument num has to be an integer between 1 to 7. ")
+            raise ValueError("Argument num has to be an integer between 1 to 7. Current version only support at most 7 different political parties.")
 
-        if self.method == "customize":
+        if method == "customize":
             if colors != [] and len(colors) != num: 
                 raise Exception("The specified of colors doesn't match the number of colors passed in. ")
             if colors == []:
@@ -45,19 +55,15 @@ class Map:
             if grid == None:
                 raise ValueError("Grid is missing under customize mode. ")
             else: 
-                self.grid = [[Agent.create_Agent(colorId = grid[i][j], color = self.colors[grid[i][j]-1], x=i, y=j) for j in range(len(grid[0]))] for i in range(len(grid))]
+                self.grid = [[Agent.create_Agent(choices=[grid[i][j]], x=i, y=j) for j in range(len(grid[0]))] for i in range(len(grid))]
             self.colorMap = matplotlib.colors.ListedColormap(self.colors)
 
-        if method == "naive":
-            self.colors = ['tomato']
-            self.colorPartyNameMapping = {'tomato':'United Right'}
-            self.colorMap = matplotlib.colors.ListedColormap(self.colors)
-            self.grid = [[Agent.create_Agent(1, 'tomato', i, j) for j in range(self.width)] for i in range(self.length)]
-            
         if method == "Uniform":
             # initialize color assignment 
             colorResort = ['red', 'gold', 'lightgreen', 'blue', 'yellow', 'pink', 'brown']
-            self.colorPartyNameMapping = {'red':"The Left", "gold":"United Democratic", "lightgreen":"Centrist", "yellow":"People's Party", "blue":"Conservative", "pink":"New Hope", "brown":"National"}
+            self.colorPartyNameMapping = {'red':"The Left", "gold":"United Democratic", 
+                                            "lightgreen":"Centrist", "yellow":"People's Party", 
+                                            "blue":"Conservative", "pink":"New Hope", "brown":"National"}
             tempColors = []
             for i in range(0, num):
                 tempColors.append(colorResort[i])
@@ -65,69 +71,104 @@ class Map:
             self.colorMap = matplotlib.colors.ListedColormap(self.colors)
             
             # initialize summary
-            for i in range(num):
-                self.summary[self.colors[i]] = 0
+            for color in self.colors:
+                self.summary[color] = 0
             
+            # initializing the grid. 
             self.grid = []
             for i in range(self.length):
-                templ = []
+                tempList = []
                 for j in range(self.width):
                     value = random.uniform(0, 1)
                     cap = 1/num
                     count = 0
                     while (cap <= 1):
                         if value <= cap:
-                            templ.append(Agent.create_Agent(count + 1, self.colors[count], i, j))
+                            # append first choice. 
+                            choices = [count + 1]
+                            temp = random.random()
+                            # append second and third choice for rank choice voting.
+                            if temp < 0.5:
+                                if count > 0:
+                                    choices.append(count)
+                                if count + 2 <= len(self.colors):
+                                    choices.append(count + 2)
+                            else:
+                                if count + 2 <= len(self.colors):
+                                    choices.append(count + 2)
+                                if count > 0:
+                                    choices.append(count)
+                            # create agent using initialized choices.
+                            tempList.append(Agent.create_Agent(choices=choices, x=i, y=j))
                             self.summary[self.colors[count]] += 1
                             break
                         else:
                             cap += 1/num
                             count += 1
-                self.grid.append(templ)
+                self.grid.append(tempList)
+            return 
                 
-        # Nebraska, enum is set to 2, with one huge concentration of a particular enum. 
-        if method == 'Nebraska':
+        # Indiana, only 3 parties. 
+        if method == 'Indiana':
             self.colors = ['tomato', 'royalblue', 'gold']
             self.colorPartyNameMapping = {'tomato':'Republican', 'royalblue':"Democratic", 'gold':"Libertarian"}
             self.colorMap = matplotlib.colors.ListedColormap(self.colors)
             
-            cityCenter_x = random.randint(0, self.length)
-            cityCenter_y = random.randint(0, self.width)
+            # cityCenter_x = random.randint(0, self.length)
+            # cityCenter_y = random.randint(0, self.width)
+            cityCenter_x = self.length / 2
+            cityCenter_y = self.width / 2
             self.grid = []
             for color in self.colors:
                 self.summary[color] = 0
             for i in range(self.length):
-                templ = []
+                tempList = []
                 for j in range(self.width):
                     # generate libertarians
                     prob = random.uniform(0, 1)
-                    if prob < 0.01:
-                        templ.append(Agent.create_Agent(colorId = 3, color = self.colors[2], x=i, y=j))
+                    if prob < 0.02:
+                        # initialize ranked choices. 
+                        choices = [3]
+                        temp = random.uniform(0, 1)
+                        if temp < 0.45:
+                            choices.append(1)
+                        elif 0.45 <= temp and temp < 0.5:
+                            choices.append(2)
+                        tempList.append(Agent.create_Agent(choices = choices, x=i, y=j))
                         self.summary['gold'] += 1
                     # generate Democrats and Republicans.
                     # the distance between this agent and the city center. 
                     distance = math.sqrt((abs(i - cityCenter_x) ** 2) + (abs(j - cityCenter_y) ** 2))
-                    prob = random.uniform(0, 1)
                     lratio = (self.length - distance) / self.length
                     wratio = (self.width - distance) / self.width
-                    amplifier = 1.2
+                    amplifier = 1.0
                     threshold = lratio * wratio * amplifier
+
+                    prob = random.uniform(0, 1)
                     if prob < threshold: 
-                        templ.append(Agent.create_Agent(colorId = 2, color = self.colors[1], x=i, y=j))
+                        choices = [2]
+                        temp = random.uniform(0, 1)
+                        if temp < 0.13:
+                            choices.append(1)
+                        tempList.append(Agent.create_Agent(choices = choices, x=i, y=j))
                         self.summary['royalblue'] += 1
                     else:
-                        templ.append(Agent.create_Agent(colorId = 1, color = self.colors[0], x=i, y=j))
+                        choices = [1]
+                        temp = random.uniform(0, 1)
+                        if temp < 0.2:
+                            choices.append(2)
+                        tempList.append(Agent.create_Agent(choices = choices, x=i, y=j))
                         self.summary['tomato'] += 1
-                self.grid.append(templ)
+                self.grid.append(tempList)
             
-        # Paris, five parties. Red being far left, purple being far right, palegreen being in the middle. 
+        # Warsaw, five parties. Red being far left, purple being far right, palegreen being in the middle. 
         # closer to the city means more likely being toward the left. 
         # further away from the city means more likely to the right. 
         if method == "Warsaw":
-            num = 5
             self.colors = ["tomato", "orange", "lightgreen", "royalblue", "mediumorchid"]
             self.colorPartyNameMapping = {"tomato":'Progressive', "orange":"Liberal", "lightgreen":"Centrist", "royalblue":"Conservative", "mediumorchid":"New Hope"}
             self.colorMap = matplotlib.colors.ListedColormap(self.colors)
+            portions = [0.5, 1.2, 3.0, 12.5]
             
             for color in self.colors:
                 self.summary[color] = 0
@@ -136,49 +177,164 @@ class Map:
             cityCenter_y = random.randint(int(self.width * 0.3), int(self.width * 0.7))
 
             for i in range(self.length):
-                templ = []
+                tempList = []
                 for j in range(self.width):
                     # the distance between this agent and the city center. 
                     distance = math.sqrt((abs(i - cityCenter_x) ** 2) + (abs(j - cityCenter_y) ** 2))
-                    prob = random.uniform(0, 1)
                     lratio = (self.length - distance) / self.length
                     wratio = (self.width - distance) / self.width
-                    amplifier = 1.2
+                    amplifier = 1.0
                     threshold = lratio * wratio * amplifier
 
-                    if prob < threshold/2: 
-                        templ.append(Agent.create_Agent(colorId = 1, color = self.colors[0], x=i, y=j))
-                        
+                    prob = random.uniform(0, 1)
+                    choices = []
+                    if prob < threshold*portions[0]:
+                        choices.append(1)
+                        if random.uniform(0, 1) < 0.5:
+                            choices.append(2)
+                        tempList.append(Agent.create_Agent(choices = choices, x=i, y=j))
                         self.summary[self.colors[0]] += 1
-                    if threshold/2 < prob and prob < 5 * threshold/4:
-                        templ.append(Agent.create_Agent(colorId = 2, color = self.colors[1], x=i, y=j))
+                    elif threshold*portions[0] < prob and prob < threshold*portions[1]:
+                        choices.append(2)
+                        if random.uniform(0, 1) < 0.5:
+                            choices.append(1)
+                            choices.append(3)
+                        else:
+                            choices.append(3)
+                            choices.append(1)
+                        tempList.append(Agent.create_Agent(choices = choices, x=i, y=j))
                         self.summary[self.colors[1]] += 1
-                    if 5*threshold/4 < prob and prob < 12 * threshold / 4 :
-                        templ.append(Agent.create_Agent(colorId = 3, color = self.colors[2], x=i, y=j))
+                    elif threshold*portions[1] < prob and prob < threshold*portions[2] :
+                        choices.append(3)
+                        if random.uniform(0, 1) < 0.5:
+                            choices.append(2)
+                            choices.append(4)
+                        else:
+                            choices.append(4)
+                            choices.append(2)
+                        tempList.append(Agent.create_Agent(choices = choices, x=i, y=j))
                         self.summary[self.colors[2]] += 1
-                    if 12 * threshold / 4 < prob and prob < 50 * threshold / 4 :
-                        templ.append(Agent.create_Agent(colorId = 4, color = self.colors[3], x=i, y=j))
+                    elif threshold*portions[2] < prob and prob < threshold*portions[3] :
+                        choices.append(4)
+                        if random.uniform(0, 1) < 0.5:
+                            choices.append(3)
+                            choices.append(5)
+                        else:
+                            choices.append(5)
+                            choices.append(3)
+                        tempList.append(Agent.create_Agent(choices = choices, x=i, y=j))
                         self.summary[self.colors[3]] += 1
-                    if 50 * threshold / 4 < prob:
-                        templ.append(Agent.create_Agent(colorId = 5, color = self.colors[4], x=i, y=j))
+                    elif threshold*portions[3] < prob:
+                        choices.append(5)
+                        if random.uniform(0, 1) < 0.5:
+                            choices.append(4)
+                        tempList.append(Agent.create_Agent(choices = [5], x=i, y=j))
                         self.summary[self.colors[4]] += 1
                         
-                self.grid.append(templ)
-                                  
-    def __str__(self):
-        return str([[str(self.grid[i][j]) for j in range(self.width)] for i in range(self.length)])
+                self.grid.append(tempList)
+
+        if method == "Hungary":
+            self.colors = ["tomato", "forestgreen", "purple", 
+                            "dodgerblue", "orange", "turquoise"]
+            self.colorPartyNameMapping = {"tomato":'Socialist Party', "forestgreen":"Green Party", 
+                                            "purple":"Momentum Movement", "dodgerblue":"Democratic Coalition", 
+                                            "orange":"Fidesz", "turquoise":"Jobbik"}
+            self.colorMap = matplotlib.colors.ListedColormap(self.colors)
+            
+            for color in self.colors:
+                self.summary[color] = 0
+            
+            cityCenter_x = random.randint(int(self.length * 0.45), int(self.length * 0.65))
+            cityCenter_y = random.randint(int(self.width * 0.45), int(self.width * 0.65))
+
+            for i in range(self.length):
+                tempList = []
+                for j in range(self.width):
+                    # the distance between this agent and the city center. 
+                    distance = math.sqrt((abs(i - cityCenter_x) ** 2) + (abs(j - cityCenter_y) ** 2))
+                    maxPointToCenterDistance = math.sqrt(max(cityCenter_x, self.length - cityCenter_x)**2 + max(cityCenter_y, self.width - cityCenter_y)**2)
+                    ratio = (maxPointToCenterDistance - distance)/maxPointToCenterDistance
+
+                    t = ratio
+                    portions = []
+                    try: 
+                        if (t > 0):
+                            portions.append((t**4.0-t**7)/(t-t**7).real)
+                            portions.append((t**3.1-t**7)/(t-t**7).real)
+                            portions.append((t**2.9-t**7)/(t-t**7).real)
+                            portions.append((t**2.6-t**7)/(t-t**7).real)
+                            portions.append((t**0.27-t**7)/(t**0.01-t**7).real)
+                        else: 
+                            portions = [0, 0, 0, 0, 0]
+                    except:
+                        portions = [0, 0, 0, 0, 0]
+
+                    prob = random.uniform(0, 1)
+                    choices = []
+                    if prob < portions[0]:
+                        choices.append(1)
+                        if random.uniform(0, 1) < 0.5:
+                            choices.append(2)
+                        tempList.append(Agent.create_Agent(choices = choices, x=i, y=j))
+                        self.summary[self.colors[0]] += 1
+                    elif portions[0] < prob and prob < portions[1]:
+                        choices.append(2)
+                        if random.uniform(0, 1) < 0.5:
+                            choices.append(1)
+                            choices.append(3)
+                        else:
+                            choices.append(3)
+                            choices.append(1)
+                        tempList.append(Agent.create_Agent(choices = choices, x=i, y=j))
+                        self.summary[self.colors[1]] += 1
+                    elif portions[1] < prob and prob < portions[2] :
+                        choices.append(3)
+                        if random.uniform(0, 1) < 0.5:
+                            choices.append(2)
+                            choices.append(4)
+                        else:
+                            choices.append(4)
+                            choices.append(2)
+                        tempList.append(Agent.create_Agent(choices = choices, x=i, y=j))
+                        self.summary[self.colors[2]] += 1
+                    elif portions[2] < prob and prob < portions[3] :
+                        choices.append(4)
+                        if random.uniform(0, 1) < 0.5:
+                            choices.append(3)
+                            choices.append(5)
+                        else:
+                            choices.append(5)
+                            choices.append(3)
+                        tempList.append(Agent.create_Agent(choices = choices, x=i, y=j))
+                        self.summary[self.colors[3]] += 1
+                    elif portions[3] < prob and prob < portions[4]:
+                        choices.append(5)
+                        if random.uniform(0, 1) < 0.5:
+                            choices.append(4)
+                        tempList.append(Agent.create_Agent(choices = choices, x=i, y=j))
+                        self.summary[self.colors[4]] += 1
+                    elif portions[4] < prob: 
+                        choices.append(6)
+                        tempList.append(Agent.create_Agent(choices = choices, x=i, y=j))
+                        self.summary[self.colors[5]] += 1
+
+                self.grid.append(tempList)
 
     def showMap(self):
         plt.imshow(self.getColorIds(), cmap = self.colorMap)
         plt.axis('off')
         plt.show()
     
-    def drawDistricts(self, numOfDistrict, 
-                    gerrymandering = False, favoredColorId = 0, 
-                    animate=False, 
-                    save=False):
-        colorList = self.colors
-        self.districts = [District.create_District(self.length, self.width, len(self.colors), ['white']+colorList) for i in range(numOfDistrict)]
+    def showDistrict(self, index):
+        self.districts[index].show()
+
+    def drawDistricts(self, numOfDistrict, animate=False):
+        if numOfDistrict <= 1:
+            raise Exception("The number of districts is invalid. Must have at least 2 districts.")
+        if numOfDistrict > self.length*self.width/2:
+            raise Exception("The number of districts are too large. The district number must be smaller than length * width / 2.")
+
+        self.districts = [District.create_District(self.length, self.width, ['white']+self.colors.copy()) for i in range(numOfDistrict)]
         
         # initializing the district centers. 
         districtCenters = []
@@ -202,7 +358,7 @@ class Map:
                     if dist < minDistance:
                         minIdx = k
                         minDistance = dist
-                self.districts[minIdx].addMember(i, j, self.grid[i][j].getColorId(), check = False)
+                self.districts[minIdx].addMember(x=i, y=j, agent=self.grid[i][j], check=False)
         
         # if we need to animate this process.
         if animate:
@@ -280,11 +436,10 @@ class Map:
         # plot it 
         tempGrid = [[0 for j in range(self.width)] for i in range(self.length) ]
         for district in self.districts:
-            majorityId = district.getMajorityColorId()
-            districtTiles = district.tiles
+            majorityId = district.getWinnerColorId()
             for i in range(district.length):
                 for j in range(district.width):
-                    if districtTiles[i][j] > 0:
+                    if district.tiles[i][j] != None:
                         if district.tileIsOnEdge(i, j):
                             tempGrid[i][j] = 0
                         else:
@@ -298,31 +453,45 @@ class Map:
         plt.imshow([bufferList] + tempGrid, cmap = colorMap)
         plt.text(0, 0, str(itr))
         plt.axis('off')
-        
-    def showDistrict(self, index):
-        self.districts[index].show()
-        
-    def showAllDistricts(self, method = "grid"):
+
+    def showAllDistricts(self, method = "compact"):
+        if (len(self.districts) == 0):
+            raise Exception("Districts have not been initialized.")
         # a 2D grid where each cell is a district. 
         if method == 'grid':
-            fig, axs = plt.subplots(int(len(self.districts)/6)+1, 6, figsize=(self.length, self.width))
-            
-            for i in range(len(self.districts)):
-                tiles, colorMapOfDistrict = self.districts[i].getIm()
-                axs[int(i/6)][i%6].imshow(tiles, cmap = colorMapOfDistrict)
-                axs[int(i/6)][i%6].axis('off')
-                axs[int(i/6)][i%6].grid(True)
+            fig, axs = plt.subplots(int(len(self.districts)/6)+1, 
+                                    min(6, len(self.districts)), 
+                                    figsize=(self.length, self.width))
+
+            if (len(self.districts) <= 6):
+                for i in range(len(self.districts)):
+                    tiles, colorMapOfDistrict = self.districts[i].getIm()
+                    axs[i].imshow(tiles, cmap = colorMapOfDistrict)
+                    axs[i].set_title("District "+ str(i+1))
+                    axs[i].axis('off')
+                    axs[i].grid(True)
+            else:
+                for i in range((int(len(self.districts)/6)+1) * 6):
+                    if i < len(self.districts):
+                        tiles, colorMapOfDistrict = self.districts[i].getIm()
+                        axs[int(i/6), i%6].imshow(tiles, cmap = colorMapOfDistrict)
+                        axs[int(i/6), i%6].set_title("District "+ str(i+1))
+                        axs[int(i/6), i%6].axis('off')
+                        axs[int(i/6), i%6].grid(True)
+                    else:
+                        axs[int(i/6), i%6].axis('off')
+
             plt.show()
+            return
 
         # display one map showing all districts with the majority color. 
-        if method == 'compact':
+        elif method == 'compact':
             tempGrid = [[0 for j in range(self.width)] for i in range(self.length) ]
             for district in self.districts:
-                majorityId = district.getMajorityColorId()
-                districtTiles = district.tiles
+                majorityId = district.getWinnerColorId()
                 for i in range(district.length):
                     for j in range(district.width):
-                        if districtTiles[i][j] > 0:
+                        if district.tiles[i][j] != None:
                             if district.tileIsOnEdge(i, j):
                                 tempGrid[i][j] = 0
                             else:
@@ -335,15 +504,16 @@ class Map:
             plt.axis('off')
             plt.show()
 
-    # displayMethod = summary, flat, arch
+    # displayMethod = summary, arch
     # electoralSystem = majoritarian, parallel, MMP, proportionalRepresentation
-    # districtCalculationMethod = FPTP
+    # districtCalculationMethod = FPTP, RankChoiceVoting
     # PRCalculationMethod = LargestRemainder, HighestAverage
     # overhangMethod = Allow, notAllowed
-    def showParliamentComposition(self, displayMethod = "flat", electoralSystem = 'majoritarian', 
+    def showParliamentComposition(self, electoralSystem = 'majoritarian', 
                                 districtCalculationMethod = 'FPTP', PRCalculationMethod = 'LargestRemainder', 
-                                overhangSeats = "Allow", seatsInParliament = 0, 
-                                legend = False, showNumber = False, showTitle=False):
+                                allowOverhangSeats = True, seatsInParliament = 0, 
+                                displayMethod = "arch", legend = True, showNumber = True, showTitle=False, 
+                                divisor = "D'Hondt", quota = "None", threshold = 1):
         # in the case of proportional representation. 
         if self.districts == []:
             raise Exception("District are not yet initialized. Cannot show parliament composition using districts.")
@@ -355,35 +525,27 @@ class Map:
 
         # initializing the parliament composition in district form using the specified electoral system. 
         if electoralSystem == 'majoritarian':
-            if districtCalculationMethod == "FPTP":
-                compositionDict = self.getDistrictsElectionResult(method="FPTP")
-            else:
-                raise Exception("The calculation method'", districtCalculationMethod ,"' has not yet being implementated.")
+            compositionDict = self.getDistrictsElectionResult(method=districtCalculationMethod)
 
         elif electoralSystem == "parallel":
-            if seatsInParliament == 0:
-                raise Exception("No seats are specified. You need to specify a seat number that is greater than the number of initialized districts.")
+            if seatsInParliament <= 0:
+                raise Exception("Specified seat number is invalid. You need to specify a seat number that is greater than the number of initialized districts.")
             if seatsInParliament <= len(self.districts):
                 raise Exception("Not enough seats are specified. You need to specify a seats number that is greater than the number of initialized districts.")
             
             # first get the number of seats allocated for districts. 
-            districtMandate = self.getDistrictsElectionResult()
+            districtMandate = self.getDistrictsElectionResult(method=districtCalculationMethod)
             for color in districtMandate.keys():
                 compositionDict[color] += districtMandate[color]
            
-            # find the number of seats for PR.
-            remainingSeats = seatsInParliament - len(self.districts) 
-            
             # get party list result.
             partyListResult = self.getPartyListResult()
 
-            # then get the number of remaining seats allocated for proportional representation. 
-            if PRCalculationMethod == 'LargestRemainder':
-                seatsAssignedForParallel = cm.LargestRemainder(partyListResult, remainingSeats)
-                for party in seatsAssignedForParallel.keys():
-                    compositionDict[party] += seatsAssignedForParallel[party]
-            else: 
-                raise Exception("The calculation method'", PRCalculationMethod ,"' has not yet being implementated.")
+            # Get the number of remaining seats allocated for proportional representation. 
+            seatsAssignedForPR = self.getPRSeatsAssignment(method = PRCalculationMethod, partyListResult = partyListResult, 
+                                                                seatsAssigned = len(self.districts), seatsToBeAssigned = seatsInParliament - len(self.districts), assignedSeats = compositionDict)
+            for party in seatsAssignedForPR.keys():
+                compositionDict[party] += seatsAssignedForPR[party]
 
         elif electoralSystem == 'MMP':
             if seatsInParliament == 0:
@@ -392,84 +554,40 @@ class Map:
                 raise Exception("Not enough seats are specified. You need to specify a seats number that is greater than the number of initialized districts.")
             
             # District seats assignment 
-            if districtCalculationMethod == "FPTP":
-                districtMandate = self.getDistrictsElectionResult(method="FPTP")
-                for color in districtMandate.keys():
-                    compositionDict[color] += districtMandate[color]
-            else:
-                raise Exception("The calculation method'", districtCalculationMethod ,"' has not yet being implementated.")
+            districtMandate = self.getDistrictsElectionResult(method=districtCalculationMethod)
+            for color in districtMandate.keys():
+                compositionDict[color] += districtMandate[color]
             
-            # Party Seats Allocation
-            partyListResult = {}
-            for color in self.colors:
-                partyListResult[color] = 0
-            for i in range(len(self.districts)):
-                districtPartyListResult = self.districts[i].getSummary(percentage=False)
-                for colorId in districtPartyListResult.keys():
-                    color = self.colors[colorId - 1]
-                    partyListResult[color] += districtPartyListResult[colorId]
-            # then get the number of remaining seats allocated for proportional representation. 
-            if PRCalculationMethod == 'LargestRemainder':
-                sumOfVotes = sum(partyListResult.values())
-                # division
-                quota = 1.0 * sumOfVotes / seatsInParliament
-                for color in partyListResult.keys():
-                    partyListResult[color] = 1.0 * partyListResult[color] / quota
-                # retrieve the integer part and decimal part. 
-                intPart = {}
-                decimalPart = {}
-                for color in partyListResult.keys():
-                    intPart[color] = int(partyListResult[color])
-                    decimalPart[color] = partyListResult[color] - int(partyListResult[color])
+            # Get Party List Result
+            partyListResult = self.getPartyListResult()
 
-                deservedSeats = {} # the amount of seats a party is rewarded according to party list result. 
-                # assign the integer component to deservedSeats. 
-                for color in intPart.keys():
-                    if color not in deservedSeats.keys():
-                        deservedSeats[color] = intPart[color]
-                    else:
-                        deservedSeats[color] += intPart[color]
-                # assign the decimal components. 
-                remainingSeats = seatsInParliament - sum(deservedSeats.values())
-                for i in range(remainingSeats):
-                    colorWithMaxDecimal = max(decimalPart, key=decimalPart.get)
-                    if colorWithMaxDecimal not in deservedSeats.keys():
-                        deservedSeats[colorWithMaxDecimal] = 1
-                    else: 
-                        deservedSeats[colorWithMaxDecimal] += 1
-                    decimalPart.pop(colorWithMaxDecimal)
-
-                # figuring out what to do with overhanging seats. 
-                if overhangSeats == "Allow":
-                    # assume if party receive more seats than it alread deserves, 
-                    # we just simply not assigning any seat to it. 
-                    for color in deservedSeats.keys():
-                        if color not in compositionDict.keys():
-                            compositionDict[color] = deservedSeats[color]
-                        else:
-                            if compositionDict[color] < deservedSeats[color]:
-                                compositionDict[color] = deservedSeats[color]
-                elif overhangSeats == 'notAllowed':
-                    compositionDict = deservedSeats.copy()
-            elif PRCalculationMethod == "HighestAverage":
-                while sum(compositionDict.values()) < seatsInParliament:
-                    divDict = {}
-                    for color in partyListResult.keys():
-                        seatsToColorFromDistrict = 0
-                        if color in compositionDict.keys():
-                            seatsToColorFromDistrict = compositionDict[color]
-                        divDict[color] = 1.0* partyListResult[color]/(1.0 + seatsToColorFromDistrict)
-                    colorWithMaxNum = max(divDict, key=divDict.get)
-                    compositionDict[colorWithMaxNum] += 1
-            else: 
-                raise Exception("The calculation method'", PRCalculationMethod ,"' has not yet being implementated.")
+            # Get the number of remaining seats allocated for proportional representation. 
+            proportionalSeatsAssignment = self.getPRSeatsAssignment(
+                                    method = PRCalculationMethod, 
+                                    partyListResult = partyListResult, 
+                                    seatsAssigned = len(self.districts), 
+                                    seatsToBeAssigned = seatsInParliament - len(self.districts), 
+                                    assignedSeats = compositionDict, 
+                                    divisor = divisor, 
+                                    quota = quota, 
+                                    threshold = threshold, 
+                                    allowOverhang=allowOverhangSeats); 
+            
+            for color in proportionalSeatsAssignment.keys():
+                compositionDict[color] += proportionalSeatsAssignment[color]
 
         elif electoralSystem == 'proportionalRepresentation':
-            if PRCalculationMethod == "LargestRemainder":
-                partyListResult = self.getPartyListResult()
-                compositionDict = cm.LargestRemainder(partyListResult, seatsInParliament)
-            else:
-                raise Exception("The method " + PRCalculationMethod + " has not been implemented yet for proportional representation.")
+            partyListResult = self.getPartyListResult()
+            compositionDict = self.getPRSeatsAssignment(
+                                    method = PRCalculationMethod, 
+                                    partyListResult = partyListResult, 
+                                    seatsAssigned = 0, 
+                                    seatsToBeAssigned = seatsInParliament, 
+                                    assignedSeats = {}, 
+                                    divisor = divisor, 
+                                    quota = quota, 
+                                    threshold = threshold, 
+                                    allowOverhang=allowOverhangSeats); 
 
         else:
             raise Exception("The electoral system'", electoralSystem ,"' has not yet being implementated.")
@@ -481,27 +599,8 @@ class Map:
         if displayMethod == 'summary':
             return compositionDict
 
-        # if the number of district is too small, we display them as flat regardless. 
-        if sum(compositionDict.values())  <= 5 and displayMethod != 'flat':
-            self.showParliamentComposition(displayMethod = 'flat')
-            return
-
-        fig, ax = plt.subplots()
-
-        # below are display method.
-
-        if displayMethod == 'flat':
-            position = 0
-            for color in compositionDict.keys():
-                for i in range(compositionDict[color]):
-                    ax.add_patch(plt.Circle((position * 10, 0), 3, color=color))
-                    position += 1
-            ax.set_aspect('equal', adjustable='datalim')
-            ax.plot()
-            plt.axis('off')
-            plt.show()
-        
         if displayMethod == 'arch':
+            fig, ax = plt.subplots()
             numOfDistricts = sum(compositionDict.values())
 
             # find the number of layers. 
@@ -648,6 +747,8 @@ class Map:
             plt.show()
 
     def showDemography(self, percentage=False):
+        if self.grid == []:
+            raise Exception("Map has not been initialized yet.")
         if percentage:
             tempDict = self.getDemography(percentage=True)
             plt.bar(self.colorPartyNameMapping.values(), tempDict.values(), color=self.summary.keys())
@@ -673,10 +774,10 @@ class Map:
         return tempDict
         
     def getDistrictMajorityColorId(self, index):
-        return self.districts[index].getMajorityColorId()
+        return self.districts[index].getWinnerColorId()
     
-    def getDistrictDemography(self, index):
-        return self.districts[index].getSummary(percentage = True)
+    def getDistrictDemography(self, index, percentage = True):
+        return self.districts[index].getSummary(percentage)
     
     def getDistrictPopulation(self, index):
         return self.districts[index].getPopulation()
@@ -684,6 +785,7 @@ class Map:
     def getDistrictsPopulation(self):
         return [district.getPopulation() for district in self.districts]
         
+    # method = FPTP, RankChoiceVoting
     def getDistrictsElectionResult(self, method = 'FPTP'):
         seatsAssiged = {}
         for color in self.colors:
@@ -694,8 +796,37 @@ class Map:
                 majorityColor = self.colors[majorityColorId]
                 seatsAssiged[majorityColor] += 1
             return seatsAssiged
+        elif method == "RankChoiceVoting":
+            for i in range(len(self.districts)):
+                agents = self.districts[i].getAgents()
+                winnerId = cm.RankChoiceVoting(agents) - 1
+                winnerParty = self.colors[winnerId]
+                seatsAssiged[winnerParty] += 1
+            return seatsAssiged
         else:
-            raise Exception("Method "+ method+" has not been implemented yet.")
+            raise Exception("Method "+ method + " has not been implemented yet.")
+    
+    def getPRSeatsAssignment(self, method = "LargestRemainder", 
+                                    partyListResult = {}, 
+                                    seatsAssigned = 0, 
+                                    seatsToBeAssigned = 0, 
+                                    assignedSeats = {}, 
+                                    divisor = "D'Hondt", 
+                                    quota = "None", 
+                                    threshold = 1, 
+                                    allowOverhang=False):
+        if method == "LargestRemainder":
+            return cm.LargestRemainder(partyListResult, seatsToBeAssigned)
+        elif method == "HighestAverage":
+            return cm.HighestAverage(partyListResultOrigin = partyListResult, 
+                                    totalSeats = seatsAssigned + seatsToBeAssigned, 
+                                    assignedSeatsOrigin = assignedSeats, 
+                                    divisor = divisor, 
+                                    quota = quota, 
+                                    threshold = threshold, 
+                                    allowOverhang=allowOverhang)
+        else: 
+            raise Exception("The PR calculation method'", method ,"' has not yet being implementated.")
 
     def getPartyListResult(self):
         partyListResult = {}
@@ -765,5 +896,5 @@ class Map:
             return True
         return False
     
-def create_Map(length, width):
-    return Map(length, width)
+def create_Map(length, width, method, num=7, grid=None, colors=[]):
+    return Map(length, width, method, num, grid, colors)

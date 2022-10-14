@@ -6,16 +6,45 @@ def FPTP(candidatesResult):
     memberWithMaxVote = max(candidatesResult, key=candidatesResult.get)
     return memberWithMaxVote
 
+def RankChoiceVoting(agents):
+    if agents == None or len(agents) == 0:
+        raise Exception("Input agents are empty.")
+    eliminatedParties = set()
+    while(True):
+        result = {}
+        for agent in agents:
+            if agent != None: 
+                preference = agent.getChoices()
+                for party in preference:
+                    if party in eliminatedParties:
+                        continue
+                    else:
+                        if party not in result:
+                            result[party] = 1
+                        else:
+                            result[party] += 1
+                        break
+        # return if only one candidate standing. 
+        if len(result.keys()) == 1:
+            return list(result.keys())[0]
+        # return if a candidate exceed majority. 
+        for candidate in result.keys():
+            if 1.0 * result[candidate] / sum(result.values()) > 0.5:
+                return candidate
+
+        partyWithLeastVote = min(result, key=result.get)
+        eliminatedParties.add(partyWithLeastVote)
+
 # Input:
 #   partyListResult: a dictionarry. Keys = name of parties. Value = Votes a party received. 
-#   totalSeats: int. The total number of seats that need to be assigned. 
+#   totalSeats: int. The number of seats that need to be assigned. 
 # Output:
 #   Dictionary: Keys = party names. Values = seats assigned to that party. 
-def LargestRemainder(partyListResult, totalSeats):
+def LargestRemainder(partyListResult, seatsToBeAssigned):
     assignedSeats = {}
     # division
     normalizedPartyListResult = {}
-    quota = 1.0 * sum(partyListResult.values()) / totalSeats
+    quota = 1.0 * sum(partyListResult.values()) / seatsToBeAssigned
     for color in partyListResult.keys():
         normalizedPartyListResult[color] = 1.0 * partyListResult[color] / quota
     # retrieve the integer part and decimal part. 
@@ -32,7 +61,7 @@ def LargestRemainder(partyListResult, totalSeats):
         else:
             assignedSeats[color] += intPart[color]
     # assign the decimal components. 
-    remainingSeats = totalSeats - sum(assignedSeats.values())
+    remainingSeats = seatsToBeAssigned - sum(assignedSeats.values())
     for i in range(remainingSeats):
         colorWithMaxDecimal = max(decimalPart, key=decimalPart.get)
         if colorWithMaxDecimal not in assignedSeats.keys():
@@ -47,14 +76,18 @@ def LargestRemainder(partyListResult, totalSeats):
 #   totalSeats: int. The total number of seats that sum(assignedSeats.values()) should become. 
 #   assignedSeatsOrigin: dictionary. Keys = name of parties. Value = Seats a party already received. 
 # Output:
-#   Dictionary: Keys = party names. Values = seats assigned to that party in the end. 
-def HighestAverage(partyListResultOrigin, totalSeats, assignedSeatsOrigin = None, divisor = "D'Hondt", 
-                    quota = "None", threshold = 1, allowOverhang=False):
+#   Dictionary: Keys = party names. Values = seats assigned to that party in the end, including pre-assigned seats and seats post assignment. 
+def HighestAverage(partyListResultOrigin, totalSeats, 
+                    assignedSeatsOrigin = None, divisor = "D'Hondt", 
+                    quota = "None", threshold = 1, allowOverhang=False, 
+                    includeSeatsThatWereAssigned = False):
+
     partyListResult = partyListResultOrigin.copy()
+    
     assignedSeats = {}
     if assignedSeatsOrigin != None:
         assignedSeats = assignedSeatsOrigin.copy()
-
+    
     # initialize the dictionary
     for party in partyListResultOrigin.keys():
         if party not in assignedSeats.keys():
@@ -113,5 +146,9 @@ def HighestAverage(partyListResultOrigin, totalSeats, assignedSeatsOrigin = None
                 raise Exception("Divisor method " + divisor + " has not been implemented.")
         partyWithMaxNum = max(divDict, key=divDict.get)
         assignedSeats[partyWithMaxNum] += 1
-    
+
+    if not includeSeatsThatWereAssigned and assignedSeatsOrigin != None:
+        for party in assignedSeatsOrigin.keys():
+            assignedSeats[party] -= assignedSeatsOrigin[party]
+
     return assignedSeats
