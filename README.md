@@ -20,3 +20,8 @@ Objective:
 
 ### Development Tool
 Most of the code will be done in Jupiter Notebook using Python and matplotlib. 
+
+
+
+https://user-images.githubusercontent.com/29587421/193418060-c4c3d10a-dbca-4e4f-ad56-eed66a0b138f.mp4
+
