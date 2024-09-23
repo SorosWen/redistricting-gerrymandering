@@ -1,7 +1,7 @@
 import sys
 import unittest
 sys.path.append('../src')
-from redistricting_simulation import Agent
+from electoralSimulation import Agent
 
 class TestAgent(unittest.TestCase):
     def test_getCoord(self):

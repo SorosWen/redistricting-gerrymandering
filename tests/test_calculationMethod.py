@@ -1,8 +1,8 @@
 import unittest
 import sys
 sys.path.insert(0, '../src')
-from redistricting_simulation import CalculationMethod as cm
-from redistricting_simulation import Agent
+from electoralSimulation import CalculationMethod as cm
+from electoralSimulation import Agent
 
 class TestMap(unittest.TestCase):
     def test_FPTP(self):
