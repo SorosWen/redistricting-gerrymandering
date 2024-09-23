@@ -3,17 +3,21 @@ import matplotlib.pyplot as plt
 import matplotlib.colors
 from functools import reduce
 from operator import add
+from . import District
 
 class District:
     def __init__(self, length, width, colorList):
         # define the size of the District. 
-        self.length = length # x
-        self.width = width # y
+        self.length = length 
+        self.width = width 
         self.tiles = [[None for j in range(self.width)] for i in range(self.length)]
         self.population = 0
-        self.summary = dict()
         self.colorList = colorList
-        
+        self.summary = dict()
+        for i in range(len(self.colorList)-1):
+            self.summary[i+1] = 0
+
+        # parameter for uninitialized funcionality. 
         self.precincts = set()
         
     def addMember(self, x, y, agent, check = True):
@@ -306,7 +310,7 @@ class District:
             return True
         return False
     
-    # method : FPTP, RankChoiceVoting, Average
+    # method : FPTP
     def getWinnerColorId(self, method="FPTP"):
         if method == "FPTP":
             max_key = max(self.summary, key=self.summary.get)
@@ -320,8 +324,14 @@ class District:
                     for j in range(self.width)] \
                     for i in range(self.length)]
 
+    def getPartyResult(self, color):
+        if color not in self.colorList:
+            raise Exception("Color not in colorlist.")
+        colorId = self.colorList.index(color)
+        return self.summary[colorId]/sum(self.summary.values())
+
     def __str__(self):
         return str(self.getTileInColorIds())
 
 def create_District(length, width, colorList):
-    return District(length, width, colorList)
+    return District(length=length, width=width, colorList=colorList)

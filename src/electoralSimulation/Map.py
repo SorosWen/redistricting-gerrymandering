@@ -1,14 +1,16 @@
 import matplotlib.pyplot as plt
 import matplotlib.colors
 from matplotlib.animation import FuncAnimation
+from matplotlib.colors import LinearSegmentedColormap
 import random
 import sys
 import math
-
-from numpy import nonzero
+import numpy as np
 from . import Agent, District
 from . import CalculationMethod as cm
 import warnings
+from io import BytesIO
+import base64
 
 class Map:
     def __init__(self, length, width, method, num = 7, grid = None, colors = []):
@@ -63,7 +65,7 @@ class Map:
             colorResort = ['red', 'gold', 'lightgreen', 'blue', 'yellow', 'pink', 'brown']
             self.colorPartyNameMapping = {'red':"The Left", "gold":"United Democratic", 
                                             "lightgreen":"Centrist", "yellow":"People's Party", 
-                                            "blue":"Conservative", "pink":"New Hope", "brown":"National"}
+                                            "blue":"Conservative", "pink":"Far Right", "brown":"National"}
             tempColors = []
             for i in range(0, num):
                 tempColors.append(colorResort[i])
@@ -110,8 +112,8 @@ class Map:
                 
         # Indiana, only 3 parties. 
         if method == 'Indiana':
-            self.colors = ['tomato', 'royalblue', 'gold']
-            self.colorPartyNameMapping = {'tomato':'Republican', 'royalblue':"Democratic", 'gold':"Libertarian"}
+            self.colors = ['red', 'blue', 'gold']
+            self.colorPartyNameMapping = {'red':'Republican', 'blue':"Democratic", 'gold':"Libertarian"}
             self.colorMap = matplotlib.colors.ListedColormap(self.colors)
             
             # cityCenter_x = random.randint(0, self.length)
@@ -151,14 +153,14 @@ class Map:
                         if temp < 0.13:
                             choices.append(1)
                         tempList.append(Agent.create_Agent(choices = choices, x=i, y=j))
-                        self.summary['royalblue'] += 1
+                        self.summary['blue'] += 1
                     else:
                         choices = [1]
                         temp = random.uniform(0, 1)
                         if temp < 0.2:
                             choices.append(2)
                         tempList.append(Agent.create_Agent(choices = choices, x=i, y=j))
-                        self.summary['tomato'] += 1
+                        self.summary['red'] += 1
                 self.grid.append(tempList)
             
         # Warsaw, five parties. Red being far left, purple being far right, palegreen being in the middle. 
@@ -325,6 +327,28 @@ class Map:
         plt.axis('off')
         plt.show()
     
+    def saveMap(self):
+        plt.imshow(self.getColorIds(), cmap = self.colorMap)
+        plt.axis('off')
+        plt.savefig("map.png", bbox_inches='tight')
+
+    def getMapForDjango(self):
+        plt.switch_backend('AGG')
+        plt.title('Map')
+        plt.imshow(self.getColorIds(), cmap = self.colorMap)
+        plt.tight_layout()
+
+        # get graph
+        buffer=BytesIO()
+        plt.savefig(buffer, format='png')
+        buffer.seek(0)
+        image_png = buffer.getvalue()
+        graph = base64.b64encode(image_png)
+        graph = graph.decode('utf-8')
+        buffer.close()
+        
+        return graph
+    
     def showDistrict(self, index):
         self.districts[index].show()
 
@@ -334,7 +358,7 @@ class Map:
         if numOfDistrict > self.length*self.width/2:
             raise Exception("The number of districts are too large. The district number must be smaller than length * width / 2.")
 
-        self.districts = [District.create_District(self.length, self.width, ['white']+self.colors.copy()) for i in range(numOfDistrict)]
+        self.districts = [District.create_District(length=self.length, width=self.width, colorList=['white']+self.colors.copy()) for i in range(numOfDistrict)]
         
         # initializing the district centers. 
         districtCenters = []
@@ -454,7 +478,7 @@ class Map:
         plt.text(0, 0, str(itr))
         plt.axis('off')
 
-    def showAllDistricts(self, method = "compact"):
+    def showAllDistricts(self, method = 'compact'):
         if (len(self.districts) == 0):
             raise Exception("Districts have not been initialized.")
         # a 2D grid where each cell is a district. 
@@ -480,22 +504,19 @@ class Map:
                         axs[int(i/6), i%6].grid(True)
                     else:
                         axs[int(i/6), i%6].axis('off')
-
+            plt.tight_layout()
             plt.show()
             return
 
         # display one map showing all districts with the majority color. 
-        elif method == 'compact':
+        elif method == 'winner':
             tempGrid = [[0 for j in range(self.width)] for i in range(self.length) ]
             for district in self.districts:
                 majorityId = district.getWinnerColorId()
                 for i in range(district.length):
                     for j in range(district.width):
                         if district.tiles[i][j] != None:
-                            if district.tileIsOnEdge(i, j):
-                                tempGrid[i][j] = 0
-                            else:
-                                tempGrid[i][j] = majorityId
+                            tempGrid[i][j] = majorityId
             bufferList = []
             for i in range(self.width):
                 bufferList.append(i % len(['white']+self.colors))
@@ -503,12 +524,79 @@ class Map:
             plt.imshow([bufferList] + tempGrid, cmap = colorMap)
             plt.axis('off')
             plt.show()
+        
+        elif method == "compact":
+            tempGrid = [[0 for j in range(self.width)] for i in range(self.length) ]
+            id = 1
+            for district in self.districts:
+                for i in range(district.length):
+                    for j in range(district.width):
+                        if district.tiles[i][j] != None:
+                            tempGrid[i][j] = id
+                id += 1
+            plt.imshow(tempGrid, cmap='hsv')
+            plt.axis('off')
+            plt.show()
 
-    # displayMethod = summary, arch
-    # electoralSystem = majoritarian, parallel, MMP, proportionalRepresentation
-    # districtCalculationMethod = FPTP, RankChoiceVoting
-    # PRCalculationMethod = LargestRemainder, HighestAverage
-    # overhangMethod = Allow, notAllowed
+    def showDistrictsElectionResult(self, color="", method='heatmap'):
+        if len(self.districts) == 0:
+            raise Exception("Districts have not been initialized.")
+        
+        if method=="heatmap":
+            if color not in self.colors:
+                raise Exception(color, "doesn't exist in this map.")
+
+            colors = ['white', color]
+            nodes = [0.0, 1.0]
+            cmap = LinearSegmentedColormap.from_list("mycmap", list(zip(nodes, colors)))
+            data = np.zeros((self.length, self.width), dtype=np.double)
+            for district in self.districts:
+                percentage = district.getPartyResult(color)
+                for i in range(district.length):
+                    for j in range(district.width):
+                        if district.tiles[i][j] != None:
+                            data[self.length -1 -i][j] = percentage
+            psm = plt.pcolormesh(data, cmap=cmap, rasterized=True, vmin=0.0, vmax=1.0)
+            plt.axis('off')
+            plt.colorbar(psm)
+            plt.show()
+
+        elif method=="bar":
+            bars = {}
+            for color in self.colors:
+                bars[color] = []
+
+            for district in self.districts:
+                districtSummary = district.getSummary(percentage=True)
+                for i in range(len(self.colors)):
+                    colorId = i+1
+                    if colorId not in districtSummary.keys():
+                        districtSummary[colorId] = 0.0
+
+                for colorId in districtSummary.keys():
+                    bars[self.colors[colorId-1]].append(districtSummary[colorId])
+            
+            barWidth = 0.8/len(self.colors)
+            br = np.arange(len(self.districts))
+
+            for color in self.colors:
+                plt.bar(br, bars[color], color=color, width = barWidth,
+                        label=self.colorPartyNameMapping[color])
+                br = [x + barWidth for x in br]
+            plt.xticks([r + barWidth for r in range(len(self.districts))],
+                        [str(i+1) for i in range(len(self.districts))])
+            plt.xlabel("Districts")
+            plt.legend()
+            plt.show()
+
+    """
+    Below are supported value for each variable
+    * displayMethod = summary, arch
+    * electoralSystem = majoritarian, parallel, MMP, proportionalRepresentation
+    * districtCalculationMethod = FPTP, RankChoiceVoting
+    * PRCalculationMethod = LargestRemainder, HighestAverage
+    * overhangMethod = Allow, notAllowed
+    """
     def showParliamentComposition(self, electoralSystem = 'majoritarian', 
                                 districtCalculationMethod = 'FPTP', PRCalculationMethod = 'LargestRemainder', 
                                 allowOverhangSeats = True, seatsInParliament = 0, 
@@ -577,6 +665,8 @@ class Map:
                 compositionDict[color] += proportionalSeatsAssignment[color]
 
         elif electoralSystem == 'proportionalRepresentation':
+            if seatsInParliament < len(self.districts) or seatsInParliament == 0:
+                raise Exception("The number of seats specified is invalid.") 
             partyListResult = self.getPartyListResult()
             compositionDict = self.getPRSeatsAssignment(
                                     method = PRCalculationMethod, 
@@ -841,6 +931,12 @@ class Map:
                 else:
                     partyListResult[color] += districtPartyListResult[colorId]
         return partyListResult
+    
+    def getColors(self):
+        return self.colors
+    
+    def getParties(self):
+        return list(self.colorPartyNameMapping.keys())
 
     def districtsHasBalancedPopulation(self):
         sum = 0
@@ -889,12 +985,12 @@ class Map:
         if count == 2:
             return False
         return True
-    
+
     # helper
     def isSafe(self, x, y):
         if (x >= 0 and x < self.length) or not (y >= 0 and y < self.width): 
             return True
         return False
     
-def create_Map(length, width, method, num=7, grid=None, colors=[]):
+def create_Map(length, width, method='Uniform', num=7, grid=None, colors=[]):
     return Map(length, width, method, num, grid, colors)

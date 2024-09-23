@@ -1,19 +1,29 @@
-# Input: 
-#   candidatesResult: a dictionary. Keys = name of candiate, Value = Votes a candidate received. 
-# Output: 
-#   String: the name of candidate that win using FPTP
+'''
+Input: 
+    (dictionary) candidatesResult:  Keys = (string) name of candiate, 
+                                    Value = (int) Votes this candidate received. 
+Output: 
+    (String) the name of candidate that win using FPTP
+'''
 def FPTP(candidatesResult):
     memberWithMaxVote = max(candidatesResult, key=candidatesResult.get)
     return memberWithMaxVote
 
+'''
+Input: 
+    agents: a list of Agent. 
+Output: 
+    (String) the name of candidate that win after RCV Tally
+'''
 def RankChoiceVoting(agents):
     if agents == None or len(agents) == 0:
         raise Exception("Input agents are empty.")
     eliminatedParties = set()
+
     while(True):
         result = {}
         for agent in agents:
-            if agent != None: 
+            if agent != None:
                 preference = agent.getChoices()
                 for party in preference:
                     if party in eliminatedParties:
@@ -35,18 +45,23 @@ def RankChoiceVoting(agents):
         partyWithLeastVote = min(result, key=result.get)
         eliminatedParties.add(partyWithLeastVote)
 
-# Input:
-#   partyListResult: a dictionarry. Keys = name of parties. Value = Votes a party received. 
-#   totalSeats: int. The number of seats that need to be assigned. 
-# Output:
-#   Dictionary: Keys = party names. Values = seats assigned to that party. 
+'''
+Input:
+    (dictionary) partyListResult: Keys = (string) the name of a partie. Value = (int) Votes this party received. 
+    (int) totalSeats: The number of seats that need to be assigned. 
+Output:
+    (dictionary)    Keys = (string) party names. 
+                    Values = (int) number of seats allocated to that party. 
+'''
 def LargestRemainder(partyListResult, seatsToBeAssigned):
     assignedSeats = {}
+
     # division
     normalizedPartyListResult = {}
     quota = 1.0 * sum(partyListResult.values()) / seatsToBeAssigned
     for color in partyListResult.keys():
         normalizedPartyListResult[color] = 1.0 * partyListResult[color] / quota
+    
     # retrieve the integer part and decimal part. 
     intPart = {}
     decimalPart = {}
@@ -60,6 +75,7 @@ def LargestRemainder(partyListResult, seatsToBeAssigned):
             assignedSeats[color] = intPart[color]
         else:
             assignedSeats[color] += intPart[color]
+
     # assign the decimal components. 
     remainingSeats = seatsToBeAssigned - sum(assignedSeats.values())
     for i in range(remainingSeats):
@@ -71,12 +87,17 @@ def LargestRemainder(partyListResult, seatsToBeAssigned):
         decimalPart.pop(colorWithMaxDecimal)
     return assignedSeats
 
-# Input:
-#   partyListResult: a dictionarry. Keys = name of parties. Value = Votes a party received. 
-#   totalSeats: int. The total number of seats that sum(assignedSeats.values()) should become. 
-#   assignedSeatsOrigin: dictionary. Keys = name of parties. Value = Seats a party already received. 
-# Output:
-#   Dictionary: Keys = party names. Values = seats assigned to that party in the end, including pre-assigned seats and seats post assignment. 
+'''
+Input:
+    (dictionary) partyListResult:   Keys = (string) name of parties. 
+                                    Value = (int) Votes a party received. 
+    (int) totalSeats: The total number of seats that sum(assignedSeats.values()) should become. 
+    (dictionary) assignedSeatsOrigin:  Keys = (string) name of parties. 
+                                        Value = (int) num of seats a party already received. 
+Output:
+    (dictionary)    Keys = (string) party names. 
+                    Values = (int) final num of seats assigned to that party, including num of pre-assigned seats. 
+'''
 def HighestAverage(partyListResultOrigin, totalSeats, 
                     assignedSeatsOrigin = None, divisor = "D'Hondt", 
                     quota = "None", threshold = 1, allowOverhang=False, 
